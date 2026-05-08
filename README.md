@@ -129,52 +129,13 @@ python cli.py health
 
 ### 2. 编程调用（与测试脚本一致）
 
-编排主干与集成测试 `tests/test_cli_qa.py` 相同：**意图 → 编排**，返回的 `orchestration_result.content` 为 **JSON 字符串**，可再解析或交给 CLI 的展示逻辑。
+编排主干与 `tests/test_cli_qa.py` 相同：**意图 → 编排**，`orchestration_result.content` 为 JSON 字符串，解析后为字典。完整示例代码见 **`examples/run_once.py`**（含 `run_once` 异步函数与命令行入口）。
 
-```python
-import asyncio
-import json
-from agentscope.message import Msg
-from agentscope.model import OpenAIChatModel
-from config import LLM_CONFIG
-from config_agentscope import init_agentscope
-from context.memory_manager import MemoryManager
-from agents.intention_agent import IntentionAgent
-from agents.orchestration_agent import OrchestrationAgent
-from agents.lazy_agent_registry import LazyAgentRegistry
+在项目根目录执行：
 
-
-async def run_once(user_text: str) -> dict:
-    init_agentscope()
-    model = OpenAIChatModel(
-        model_name=LLM_CONFIG["model_name"],
-        api_key=LLM_CONFIG["api_key"],
-        client_kwargs={"base_url": LLM_CONFIG["base_url"]},
-        temperature=LLM_CONFIG.get("temperature", 0.7),
-        max_tokens=LLM_CONFIG.get("max_tokens", 2000),
-    )
-    memory_manager = MemoryManager(
-        user_id="api_demo_user",
-        session_id="session_1",
-        llm_model=model,
-    )
-    intention_agent = IntentionAgent(name="IntentionAgent", model=model)
-    registry = LazyAgentRegistry(model, {}, memory_manager)
-    orchestrator = OrchestrationAgent(
-        name="OrchestrationAgent",
-        agent_registry=registry,
-        memory_manager=memory_manager,
-    )
-
-    ctx = [Msg(name="user", content=user_text, role="user")]
-    intention_msg = await intention_agent.reply(ctx)
-    out_msg = await orchestrator.reply(intention_msg)
-    return json.loads(out_msg.content)
-
-
-if __name__ == "__main__":
-    result = asyncio.run(run_once("从北京到上海出差两天，列出大致行程要点"))
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+```bash
+python examples/run_once.py
+python examples/run_once.py "出差住宿标准是多少？"
 ```
 
 若在自有应用中嵌入 CLI 已有会话与熔断逻辑，可使用 **`AligoCLI`** 的 **`initialize_system()`** 与 **`process_query(user_input)`**（见 `cli.py`），行为与终端一致。
@@ -293,6 +254,8 @@ python tests/test_information_query_agent.py
 │   ├── test_event_collection_agent.py
 │   └── test_information_query_agent.py
 │
+├── examples/
+│   └── run_once.py                         # 编程调用示例（意图 → 编排）
 ├── cli.py                                  # CLI：AligoCLI，交互入口
 ├── config.py                               # LLM / RAG / 韧性配置
 ├── config_agentscope.py                    # AgentScope 初始化
