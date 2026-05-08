@@ -1,4 +1,3 @@
-# 01TripAssistant
 # 差旅出行助手Multi-Agent系统
 
 基于 **大语言模型** 与 **AgentScope** 的多智能体差旅助手：用语义意图识别驱动 Plan-and-Execute 编排，集成 RAG 企业知识、联网搜索与长期/短期记忆，在终端通过 CLI 交互。
@@ -211,21 +210,92 @@ python tests/test_information_query_agent.py
 
 ---
 
-## 项目结构（节选）
+## 项目结构
+
+### 智能体分层说明
+
+| 层级 | 组件 | 职责 |
+|------|------|------|
+| 编排入口 | `IntentionAgent` | 解析用户意图，产出调度计划（JSON） |
+| 编排入口 | `OrchestrationAgent` | 按优先级调用子 Agent，聚合结果 |
+| 插件注册 | `LazyAgentRegistry` | 扫描 `.claude/skills/*/script/agent.py` 并懒加载实例 |
+
+子智能体均以 **Skill 插件** 形式实现；意图侧常用 **`agents/lazy_agent_registry.py` 中的遗留别名** 指向对应目录（如下表）。
+
+| 调度名（意图/编排使用） | Skill 目录 | Agent 类 | 说明 |
+|-------------------------|------------|----------|------|
+| `rag_knowledge` | `ask-question/` | `RAGKnowledgeAgent` | 企业差旅知识库 RAG |
+| `memory_query` | `memory-query/` | `MemoryQueryAgent` | 历史行程、偏好、对话记忆 |
+| `preference` | `preference/` | `PreferenceAgent` | 偏好抽取与持久化 |
+| `information_query` | `query-info/` | `InformationQueryAgent` | 联网搜索（DDGS）+ 摘要 |
+| `event_collection` | `event-collection/` | `EventCollectionAgent` | 出差要素收集 |
+| `itinerary_planning` | `plan-trip/` | `ItineraryPlanningAgent` | 行程规划（含 `plan_trip_execution.py` 执行脚本） |
+
+### 目录树（含 Agent 与关键文件）
 
 ```
 .
-├── agents/                    # 意图识别、编排、Skill 注册
-├── context/                   # MemoryManager、短/长期记忆实现
-├── utils/                     # Skill 加载、熔断、LLM 韧性等
-├── .claude/skills/            # 各 Skill（问答、规划、偏好…）
+├── agents/                                 # 编排层（非 Skill）
+│   ├── intention_agent.py                  # IntentionAgent：意图识别
+│   ├── orchestration_agent.py              # OrchestrationAgent：多 Agent 调度
+│   ├── lazy_agent_registry.py              # LazyAgentRegistry：Skill 发现与懒加载
+│   └── __init__.py
+│
+├── .claude/skills/                         # Skill 插件根目录（每个子目录一个子 Agent）
+│   ├── ask-question/                       # → RAGKnowledgeAgent（调度名 rag_knowledge）
+│   │   ├── SKILL.md
+│   │   ├── script/
+│   │   │   ├── agent.py                    # RAGKnowledgeAgent 实现
+│   │   │   └── init_knowledge_base.py      # 向量库初始化
+│   │   └── data/                           # 文档 + Milvus Lite 数据文件
+│   ├── memory-query/                       # → MemoryQueryAgent
+│   │   ├── SKILL.md
+│   │   └── script/agent.py
+│   ├── preference/                         # → PreferenceAgent
+│   │   ├── SKILL.md
+│   │   └── script/agent.py
+│   ├── query-info/                         # → InformationQueryAgent
+│   │   ├── SKILL.md
+│   │   └── script/agent.py
+│   ├── event-collection/                   # → EventCollectionAgent
+│   │   ├── SKILL.md
+│   │   └── script/agent.py
+│   ├── plan-trip/                          # → ItineraryPlanningAgent
+│   │   ├── SKILL.md
+│   │   └── script/
+│   │       ├── agent.py
+│   │       └── plan_trip_execution.py      # 规划流程执行辅助
+│   └── README.md
+│
+├── context/                                # 记忆子系统
+│   ├── memory_manager.py                   # MemoryManager：统一短/长期记忆入口
+│   ├── short_term_memory.py                # 会话级短期上下文
+│   ├── long_term_memory.py                 # 持久化长期记忆（默认 JSON 后端）
+│   └── __init__.py
+│
+├── utils/
+│   ├── skill_loader.py                     # Skill 元数据与加载辅助
+│   ├── json_parser.py                      # JSON 解析工具
+│   ├── circuit_breaker.py                  # 熔断器
+│   └── llm_resilience.py                   # 重试、健康检查
+│
 ├── data/
-│   ├── memory/                # 长期记忆 JSON（按 user_id）
-│   └── models/                # 本地 Embedding 模型
-├── tests/                     # 测试与 QA 报告输出
-├── cli.py                     # 主程序入口
-├── config.py                  # 全局配置
-├── config_agentscope.py       # AgentScope 初始化
+│   ├── memory/                             # 长期记忆：{user_id}.json
+│   └── models/
+│       └── bge-small-zh-v1.5/              # 本地 Embedding（RAG）
+│
+├── tests/                                  # 单测与集成；results/ 下为 QA 报告
+│   ├── test_cli_qa.py
+│   ├── test_intention_agent.py
+│   ├── test_orchestration.py
+│   ├── test_memory_system.py
+│   ├── test_rag_agent.py
+│   ├── test_event_collection_agent.py
+│   └── test_information_query_agent.py
+│
+├── cli.py                                  # CLI：AligoCLI，交互入口
+├── config.py                               # LLM / RAG / 韧性配置
+├── config_agentscope.py                    # AgentScope 初始化
 └── requirements.txt
 ```
 
