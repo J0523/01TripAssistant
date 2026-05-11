@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Aligo 商旅助手 - CLI 交互界面
+差旅助手Agent - CLI 交互界面
 使用 Rich 库实现美观的终端交互
 """
 import asyncio
